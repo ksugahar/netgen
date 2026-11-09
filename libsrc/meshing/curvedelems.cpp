@@ -2596,26 +2596,22 @@ namespace netgen
       };
   }
 
-  template <int DIM_SPACE, typename T>
+  template <int DIM_SPACE, typename TAD>
   bool CurvedElements ::
-  EvaluateMapping (SurfaceElementInfo & info, const Point<2,T> xi, Point<DIM_SPACE,T> & mx, Mat<DIM_SPACE,2,T> & jac) const
+  EvaluateMappingAD (SurfaceElementInfo & info, TAD x, TAD y, TAD * mapped_x) const
   {
     const Element2dRef & el = mesh[info.elnr];
     if (rational && info.order >= 2) return false; // not supported     
 
-    AutoDiff<2,T> x(xi(0), 0);
-    AutoDiff<2,T> y(xi(1), 1);
-
-    AutoDiff<2,T> mapped_x[DIM_SPACE];
     for (int i = 0; i < DIM_SPACE; i++)
-      mapped_x[i] = AutoDiff<2,T>(0.0);
+      mapped_x[i] = TAD(0.0);
     
     switch (el.GetType())
       {
       case TRIG6:
         {
-          AutoDiff<2,T> lam3 = 1-x-y;
-          AutoDiff<2,T> lami[6] = { x * (2*x-1), y * (2*y-1), lam3 * (2*lam3-1),
+          TAD lam3 = 1-x-y;
+          TAD lami[6] = { x * (2*x-1), y * (2*y-1), lam3 * (2*lam3-1),
                                     4 * y * lam3, 4 * x * lam3, 4 * x * y };
           for (int j = 0; j < 6; j++)
             {
@@ -2629,7 +2625,7 @@ namespace netgen
       case TRIG:
         {
           // if (info.order >= 2) return false; // not yet supported
-          AutoDiff<2,T> lami[4] = { x, y, 1-x-y };
+          TAD lami[4] = { x, y, 1-x-y };
           for (int j = 0; j < 3; j++)
             {
               Point<3> p = mesh[el[j]];
@@ -2650,7 +2646,7 @@ namespace netgen
                   if (el[vi1] > el[vi2]) swap (vi1, vi2);
 
                   CalcScaledEdgeShapeLambda (eorder, lami[vi1]-lami[vi2], lami[vi1]+lami[vi2],
-                                             [&](int i, AutoDiff<2,T> shape)
+                                             [&](int i, TAD shape)
                                              {
                                                for (int k = 0; k < DIM_SPACE; k++)
                                                  mapped_x[k] += edgecoeffs[first+i](k) * shape;
@@ -2669,8 +2665,8 @@ namespace netgen
               if (el[fnums[0]] > el[fnums[1]]) swap (fnums[0], fnums[1]);
               
               CalcScaledTrigShapeLambda (forder, 
-                                         lami[fnums[1]]-lami[fnums[0]], lami[fnums[2]], AutoDiff<2,T>(1.0),
-                                         [&](int i, AutoDiff<2,T> shape)
+                                         lami[fnums[1]]-lami[fnums[0]], lami[fnums[2]], TAD(1.0),
+                                         [&](int i, TAD shape)
                                          {
                                            for (int k = 0; k < DIM_SPACE; k++)
                                              mapped_x[k] += facecoeffs[first+i](k) * shape;
@@ -2680,8 +2676,8 @@ namespace netgen
         }
       case QUAD: 
         {
-          AutoDiff<2,T> lami[4] = { (1-x)*(1-y), x*(1-y), x*y, (1-x)*y };
-          AutoDiff<2,T> mui[4] = { (1-x)+(1-y), x+(1-y), x+y, (1-x)+y };
+          TAD lami[4] = { (1-x)*(1-y), x*(1-y), x*y, (1-x)*y };
+          TAD mui[4] = { (1-x)+(1-y), x+(1-y), x+y, (1-x)+y };
           for (int j = 0; j < 4; j++)
             {
               Point<3> p = mesh[el[j]];
@@ -2703,7 +2699,7 @@ namespace netgen
 
                   auto lame = lami[vi1]+lami[vi2];
                   CalcEdgeShapeLambda(eorder, mui[vi1]-mui[vi2],
-                                      [&](int i, AutoDiff<2,T> shape)
+                                      [&](int i, TAD shape)
                                       {
                                         for (int k = 0; k < DIM_SPACE; k++)
                                           mapped_x[k] += edgecoeffs[first+i](k) * (lame*shape);
@@ -2727,7 +2723,7 @@ namespace netgen
               fnums[3] = (fmin+3)%4;
               if (el[fnums[3]] < el[fnums[1]]) swap (fnums[1], fnums[3]);
               
-              AutoDiff<2,T>  mui[4];
+              TAD  mui[4];
               mui[0] = (1-x)+(1-y);
               mui[1] = (  x)+(1-y);
               mui[2] = (  x)+(  y);
@@ -2737,7 +2733,7 @@ namespace netgen
                                    // 1-2*x, 1-2*y,
                                    mui[fnums[1]]-mui[fnums[0]],
                                    mui[fnums[3]]-mui[fnums[0]], 
-                                   [&](int i, AutoDiff<2,T> shape)
+                                   [&](int i, TAD shape)
                                    {
                                      for (int k = 0; k < DIM_SPACE; k++)
                                        mapped_x[k] += facecoeffs[first+i](k) * shape;
@@ -2750,8 +2746,8 @@ namespace netgen
         }
       case QUAD8:
         {
-          // AutoDiff<2,T> lami[4] = { (1-x)*(1-y), x*(1-y), x*y, (1-x)*y };
-          AutoDiff<2,T> lami[8] =
+          // TAD lami[4] = { (1-x)*(1-y), x*(1-y), x*y, (1-x)*y };
+          TAD lami[8] =
             { (1-x)*(1-y),
               x*(1-y),
               x*y,
@@ -2778,6 +2774,16 @@ namespace netgen
       default:
         return false;
       }
+    return true;
+  }
+
+  template <int DIM_SPACE, typename T>
+  bool CurvedElements ::
+  EvaluateMapping (SurfaceElementInfo & info, const Point<2,T> xi, Point<DIM_SPACE,T> & mx, Mat<DIM_SPACE,2,T> & jac) const
+  {
+    AutoDiff<2,T> mapped_x[DIM_SPACE];
+    if (!EvaluateMappingAD<DIM_SPACE> (info, AutoDiff<2,T>(xi(0), 0), AutoDiff<2,T>(xi(1), 1), mapped_x))
+      return false;
         
     for (int i = 0; i < DIM_SPACE; i++)
       {
@@ -4201,25 +4207,23 @@ namespace netgen
   }
 
   // extern int mappingvar;
-  template <typename T>
+  // generic in the AD type: AutoDiff for the Jacobian, AutoDiffDiff for the Hessian
+  template <typename TAD>
   bool CurvedElements ::
-  EvaluateMapping (ElementInfo & info, Point<3,T> xi, Point<3,T> & mx, Mat<3,3,T> & jac) const
+  EvaluateMappingAD (ElementInfo & info, TAD x, TAD y, TAD z, TAD * mapped_x) const
   {
     auto el = mesh[info.elnr];
     if (rational && info.order >= 2) return false; // not supported     
 
-    AutoDiff<3,T> x(xi(0), 0);
-    AutoDiff<3,T> y(xi(1), 1);
-    AutoDiff<3,T> z(xi(2), 2);
-
-    AutoDiff<3,T> mapped_x[3] = { T(0.0), T(0.0), T(0.0) } ;
+    for (int k = 0; k < 3; k++)
+      mapped_x[k] = TAD(0.0);
     
     switch (el.GetType())
       {
       case TET:
         {
           // if (info.order >= 2) return false; // not yet supported
-          AutoDiff<3,T> lami[4] = { x, y, z, 1-x-y-z };
+          TAD lami[4] = { x, y, z, 1-x-y-z };
           for (int j = 0; j < 4; j++)
             {
               Point<3> p = mesh[el[j]];
@@ -4240,7 +4244,7 @@ namespace netgen
                   if (el[vi1] > el[vi2]) swap (vi1, vi2);
 
                   CalcScaledEdgeShapeLambda (eorder, lami[vi1]-lami[vi2], lami[vi1]+lami[vi2],
-                                             [&](int i, AutoDiff<3,T> shape)
+                                             [&](int i, TAD shape)
                                              {
                                                Vec<3> coef = edgecoeffs[first+i];
                                                for (int k = 0; k < 3; k++)
@@ -4265,7 +4269,7 @@ namespace netgen
                   CalcScaledTrigShapeLambda (forder, 
                                              lami[fnums[1]]-lami[fnums[0]], lami[fnums[2]], 
                                              lami[fnums[0]]+lami[fnums[1]]+lami[fnums[2]],
-                                             [&](int i, AutoDiff<3,T> shape)
+                                             [&](int i, TAD shape)
                                              {
                                                Vec<3> coef = facecoeffs[first+i];
                                                for (int k = 0; k < 3; k++)
@@ -4279,7 +4283,7 @@ namespace netgen
       case HEX:
         {
           // if (info.order >= 2) return false; // not yet supported          
-          AutoDiff<3,T> lami[8] =
+          TAD lami[8] =
             { (1-x)*(1-y)*(1-z),
               (  x)*(1-y)*(1-z),
               (  x)*   y *(1-z),
@@ -4298,7 +4302,7 @@ namespace netgen
 
           if (info.order == 1) break;
 
-          AutoDiff<3,T> mu[8] = {
+          TAD mu[8] = {
             (1-x)+(1-y)+(1-z),
             x    +(1-y)+(1-z),
             x    +   y +(1-z),
@@ -4321,9 +4325,9 @@ namespace netgen
                   int vi1 = edges[i][0], vi2 = edges[i][1];
                   if (el[vi1] > el[vi2]) swap (vi1, vi2);
 
-                  AutoDiff<3,T> lame = lami[vi1]+lami[vi2];
+                  TAD lame = lami[vi1]+lami[vi2];
                   CalcEdgeShapeLambda (eorder, mu[vi1]-mu[vi2], 
-                                       [&](int i, AutoDiff<3,T> shape)
+                                       [&](int i, TAD shape)
                                        {
                                          Vec<3> coef = edgecoeffs[first+i];
                                          for (int k = 0; k < 3; k++)
@@ -4353,7 +4357,7 @@ namespace netgen
                   CalcQuadShapeLambda (forder,
                                        mu[faces[i][fx]]-mu[faces[i][fmin]],
                                        mu[faces[i][fy]]-mu[faces[i][fmin]],
-                                       [&](int i, AutoDiff<3,T> shape)
+                                       [&](int i, TAD shape)
                                        {
                                          for (int k = 0; k < 3; k++)
                                            mapped_x[k] += facecoeffs[first+i](k) * lamf * shape;
@@ -4365,9 +4369,9 @@ namespace netgen
         }
       case PRISM:
         {
-          AutoDiff<3,T> lami[6] = { x, y,1-x-y, x, y, 1-x-y };
-          AutoDiff<3,T> lamiz[6] = { 1-z, 1-z, 1-z, z, z, z };
-          AutoDiff<3,T> sigma[6];
+          TAD lami[6] = { x, y,1-x-y, x, y, 1-x-y };
+          TAD lamiz[6] = { 1-z, 1-z, 1-z, z, z, z };
+          TAD sigma[6];
           for (int i = 0; i < 6; i++) sigma[i] = lami[i] + lamiz[i];
 
           for (int j = 0; j < 6; j++)
@@ -4390,7 +4394,7 @@ namespace netgen
                   if (el[vi1] > el[vi2]) swap (vi1, vi2);
 
                   CalcScaledEdgeShapeLambda (eorder, lami[vi1]-lami[vi2], lami[vi1]+lami[vi2],
-                                             [&](int j, AutoDiff<3,T> shape)
+                                             [&](int j, TAD shape)
                                              {
                                                Vec<3> coef = edgecoeffs[first+j];
                                                for (int k = 0; k < 3; k++)
@@ -4410,7 +4414,7 @@ namespace netgen
                   auto bubxy = lami[vi1];
                   
                   CalcEdgeShapeLambda (eorder, lamiz[vi1]-lamiz[vi2],
-                                       [&](int j, AutoDiff<3,T> shape)
+                                       [&](int j, TAD shape)
                                        {
                                          Vec<3> coef = edgecoeffs[first+j];
                                          for (int k = 0; k < 3; k++)
@@ -4434,8 +4438,8 @@ namespace netgen
 
               auto lamf = lamiz[fav[0]];
               CalcScaledTrigShapeLambda (forder, 
-                                         lami[fav[2]]-lami[fav[1]], lami[fav[0]], AutoDiff<3,T>(1.0),
-                                         [&](int j, AutoDiff<3,T> shape)
+                                         lami[fav[2]]-lami[fav[1]], lami[fav[0]], TAD(1.0),
+                                         [&](int j, TAD shape)
                                          {
                                            Vec<3> coef = facecoeffs[first+j];            
                                            for (int k = 0; k < 3; k++)
@@ -4461,7 +4465,7 @@ namespace netgen
                   auto xi = sigma[faces[i][fx]]-sigma[faces[i][fmin]];
                   auto eta = sigma[faces[i][fy]]-sigma[faces[i][fmin]];
                     
-                  AutoDiff<3,T> scalexi(1.0), scaleeta(1.0);
+                  TAD scalexi(1.0), scaleeta(1.0);
                   if (faces[i][fmin] / 3 == faces[i][fx] / 3)  
                     scalexi = lami[faces[i][fmin]]+lami[faces[i][fx]];  // xi is horizontal
                   else
@@ -4469,7 +4473,7 @@ namespace netgen
                   
                   CalcScaledQuadShapeLambda (forder, 
                                              xi, eta, scalexi, scaleeta, 
-                                             [&](int j, AutoDiff<3,T> shape)
+                                             [&](int j, TAD shape)
                                              {
                                                Vec<3> coef = facecoeffs[first+j];            
                                                for (int k = 0; k < 3; k++)
@@ -4490,9 +4494,9 @@ namespace netgen
           auto xt = x / den;
           auto yt = y / den;
           
-          AutoDiff<3,T> sigma[4]  = { (1-xt)+(1-yt), xt+(1-yt), xt+yt, (1-xt)+yt };
-          AutoDiff<3,T> lambda[4] = { (1-xt)*(1-yt), xt*(1-yt), xt*yt, (1-xt)*yt };
-          AutoDiff<3,T> lambda3d[5];
+          TAD sigma[4]  = { (1-xt)+(1-yt), xt+(1-yt), xt+yt, (1-xt)+yt };
+          TAD lambda[4] = { (1-xt)*(1-yt), xt*(1-yt), xt*yt, (1-xt)*yt };
+          TAD lambda3d[5];
           
           for (int i = 0; i < 4; i++)  
             lambda3d[i] = lambda[i] * (1-z);
@@ -4519,7 +4523,7 @@ namespace netgen
                   
                   CalcScaledEdgeShapeLambda (eorder, (sigma[vi1]-sigma[vi2])*(1-z),
                                              1-z,
-                                             [&](int j, AutoDiff<3,T> shape)
+                                             [&](int j, TAD shape)
                                              {
                                                Vec<3> coef = edgecoeffs[first+j];
                                                for (int k = 0; k < 3; k++)
@@ -4539,7 +4543,7 @@ namespace netgen
                   
                   CalcScaledEdgeShapeLambda (eorder, lambda3d[vi1]-lambda3d[vi2],
                                              lambda3d[vi1]+lambda3d[vi2],
-                                             [&](int j, AutoDiff<3,T> shape)
+                                             [&](int j, TAD shape)
                                              {
                                                Vec<3> coef = edgecoeffs[first+j];
                                                for (int k = 0; k < 3; k++)
@@ -4555,6 +4559,17 @@ namespace netgen
       default:
         return false;
       }
+    return true;
+  }
+
+  template <typename T>
+  bool CurvedElements ::
+  EvaluateMapping (ElementInfo & info, Point<3,T> xi, Point<3,T> & mx, Mat<3,3,T> & jac) const
+  {
+    AutoDiff<3,T> mapped_x[3];
+    if (!EvaluateMappingAD (info, AutoDiff<3,T>(xi(0), 0), AutoDiff<3,T>(xi(1), 1),
+                            AutoDiff<3,T>(xi(2), 2), mapped_x))
+      return false;
 
     for (int i = 0; i < 3; i++)
       {
@@ -4569,6 +4584,85 @@ namespace netgen
 
 
   
+  template <typename T>
+  bool CurvedElements ::
+  CalcMultiPointElementHesse (ElementIndex elnr, int n,
+                              const T * xi, size_t sxi,
+                              T * ddx, size_t sddx)
+  {
+    if (mesh.coarsemesh) return false;
+
+    ElementInfo info;
+    info.elnr = elnr;
+    info.order = order;
+    if (info.order > 1)
+      {
+        const MeshTopology & top = mesh.GetTopology();
+        info.SetEdges (top.GetEdges(elnr));
+        info.SetFaces (top.GetFaces(elnr));
+      }
+
+    for (int i = 0; i < n; i++)
+      {
+        AutoDiffDiff<3,T> mx[3];
+        if (!EvaluateMappingAD (info, AutoDiffDiff<3,T>(xi[i*sxi], 0),
+                                AutoDiffDiff<3,T>(xi[i*sxi+1], 1),
+                                AutoDiffDiff<3,T>(xi[i*sxi+2], 2), mx))
+          return false;
+        for (int j = 0; j < 3; j++)
+          for (int k = 0; k < 9; k++)
+            ddx[i*sddx+9*j+k] = mx[j].DDValue(k);
+      }
+    return true;
+  }
+
+  template <int DIM_SPACE, typename T>
+  bool CurvedElements ::
+  CalcMultiPointSurfaceHesse (SurfaceElementIndex elnr, int n,
+                              const T * xi, size_t sxi,
+                              T * ddx, size_t sddx)
+  {
+    if (mesh.coarsemesh) return false;
+
+    SurfaceElementInfo info;
+    info.elnr = elnr;
+    info.order = order;
+    if (info.order > 1)
+      {
+        const MeshTopology & top = mesh.GetTopology();
+        info.SetEdges (top.GetEdges(elnr));
+        info.facenr = top.GetFace (elnr);
+        for (auto e : info.edgenrs)
+          if (e.Nr0()+1 >= edgecoeffsindex.Size()) return false;
+        if (info.facenr.Nr0()+1 >= facecoeffsindex.Size()) return false;
+      }
+
+    for (int i = 0; i < n; i++)
+      {
+        AutoDiffDiff<2,T> mx[DIM_SPACE];
+        if (!EvaluateMappingAD<DIM_SPACE> (info, AutoDiffDiff<2,T>(xi[i*sxi], 0),
+                                           AutoDiffDiff<2,T>(xi[i*sxi+1], 1), mx))
+          return false;
+        for (int j = 0; j < DIM_SPACE; j++)
+          for (int k = 0; k < 4; k++)
+            ddx[i*sddx+4*j+k] = mx[j].DDValue(k);
+      }
+    return true;
+  }
+
+  template bool CurvedElements :: CalcMultiPointElementHesse<double>
+  (ElementIndex, int, const double *, size_t, double *, size_t);
+  template bool CurvedElements :: CalcMultiPointElementHesse<SIMD<double>>
+  (ElementIndex, int, const SIMD<double> *, size_t, SIMD<double> *, size_t);
+  template bool CurvedElements :: CalcMultiPointSurfaceHesse<2,double>
+  (SurfaceElementIndex, int, const double *, size_t, double *, size_t);
+  template bool CurvedElements :: CalcMultiPointSurfaceHesse<3,double>
+  (SurfaceElementIndex, int, const double *, size_t, double *, size_t);
+  template bool CurvedElements :: CalcMultiPointSurfaceHesse<2,SIMD<double>>
+  (SurfaceElementIndex, int, const SIMD<double> *, size_t, SIMD<double> *, size_t);
+  template bool CurvedElements :: CalcMultiPointSurfaceHesse<3,SIMD<double>>
+  (SurfaceElementIndex, int, const SIMD<double> *, size_t, SIMD<double> *, size_t);
+
   void CurvedElements :: 
   GetCoefficients (ElementInfo & info, Vec<3> * coefs) const
   {

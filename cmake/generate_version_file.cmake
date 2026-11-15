@@ -30,6 +30,11 @@ if(status AND NOT status EQUAL 0)
 endif()
 string(STRIP ${git_version_string} git_version_string)
 
+# A PEP 440 local segment in the tag (e.g. v6.2.2608+radia.1) is kept for the
+# Python version and removed before the numeric fields are parsed.
+string(REGEX MATCH "\\+[0-9A-Za-z.]+" NETGEN_VERSION_LOCAL "${git_version_string}")
+string(REGEX REPLACE "\\+[0-9A-Za-z.]+" "" git_version_string "${git_version_string}")
+
 string(REGEX REPLACE "^v([0-9]+)\\..*" "\\1" NETGEN_VERSION_MAJOR "${git_version_string}")
 string(REGEX REPLACE "^v[0-9]+\\.([0-9]+).*" "\\1" NETGEN_VERSION_MINOR "${git_version_string}")
 string(REGEX REPLACE "^v[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" NETGEN_VERSION_PATCH "${git_version_string}")
@@ -73,6 +78,7 @@ if(NOT NETGEN_VERSION_PYTHON)
         # current commit is tagged -> clean release version
         set(NETGEN_VERSION_PYTHON "${NETGEN_VERSION_SHORT}")
     endif()
+    set(NETGEN_VERSION_PYTHON "${NETGEN_VERSION_PYTHON}${NETGEN_VERSION_LOCAL}")
 endif()
 
 

@@ -753,12 +753,13 @@ add_custom_target(uninstall
 # Generate package config file
 set(NETGEN_MSVC_RUNTIME_LIBRARY ${CMAKE_MSVC_RUNTIME_LIBRARY})
 
-# A zlib built by the superbuild (BUILD_ZLIB) is a static archive linked
-# privately into nglib. Consumers never link it, and its path lies in the build
-# tree, so the installed config must not carry it.
+# A zlib built by the superbuild (BUILD_ZLIB, signalled by NETGEN_ZLIB_INTERNAL)
+# is a static archive linked privately into nglib. Consumers never link it, and
+# its path lies in the build tree, so the installed config must not carry it.
+# An externally provided zlib is passed through unchanged.
 set(NETGEN_CONFIG_ZLIB_INCLUDE_DIRS "${ZLIB_INCLUDE_DIRS}")
 set(NETGEN_CONFIG_ZLIB_LIBRARIES "${ZLIB_LIBRARIES}")
-if(ZLIB_LIBRARIES MATCHES "(zlibstatic\\.lib|libz\\.a)$" AND ZLIB_ROOT MATCHES "/dependencies/zlib$")
+if(NETGEN_ZLIB_INTERNAL)
   set(NETGEN_CONFIG_ZLIB_INCLUDE_DIRS "")
   set(NETGEN_CONFIG_ZLIB_LIBRARIES "")
 endif()

@@ -148,7 +148,10 @@ else(BUILD_OCC)
 endif(BUILD_OCC)
 endif(USE_OCC)
 
+set(NETGEN_ZLIB_INTERNAL OFF)
 if(BUILD_ZLIB)
+  # Tells the Netgen child that zlib is the private static copy built here.
+  set(NETGEN_ZLIB_INTERNAL ON)
   set(ZLIB_ROOT ${CMAKE_CURRENT_BINARY_DIR}/dependencies/zlib)
   ExternalProject_Add(project_zlib
     ${SUBPROJECT_ARGS}
@@ -279,6 +282,7 @@ set_vars( NETGEN_CMAKE_ARGS
   ZLIB_LIBRARIES
   ZLIB_LIBRARY_RELEASE
   ZLIB_ROOT
+  NETGEN_ZLIB_INTERNAL
 
   NGLIB_LIBRARY_TYPE
   NGCORE_LIBRARY_TYPE

@@ -462,7 +462,7 @@ namespace ngcore
 
   NETGEN_INLINE SIMD<double,2>  SwapPairs (SIMD<double,2> a)
   {
-    return __builtin_shufflevector(a.Data(), a.Data(), 1, 0);
+    return vextq_f64(a.Data(), a.Data(), 1);
   }
   
 

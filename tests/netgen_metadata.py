@@ -44,6 +44,12 @@ def dynamic_metadata(field: str, settings: dict | None = None) -> str | list[str
     if field == "version":
         return utils.get_version(os.getcwd())
     if field == "dependencies":
+        # NETGEN_BUNDLED_OCC=1: the wheel links a static OpenCASCADE (no netgen-occt
+        # wheel exists for the platform); the build script verifies it bundles no libTK*.
+        if os.environ.get("NETGEN_BUNDLED_OCC") == "1":
+            return ["numpy"]
+        if os.environ.get("NETGEN_BUNDLED_OCC", "0") != "0":
+            raise ValueError("NETGEN_BUNDLED_OCC must be 0 or 1")
         return [utils.get_occt_requirement(), "numpy"]
 
     msg = "Only the 'version' and 'dependencies' fields are supported"

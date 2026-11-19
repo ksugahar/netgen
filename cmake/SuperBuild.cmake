@@ -204,6 +204,7 @@ if (USE_PYTHON)
     endif()
 
     set_vars(NETGEN_CMAKE_ARGS
+      Python3_INCLUDE_DIR
       Python3_INCLUDE_DIRS
       Python3_LIBRARIES
       Python3_EXECUTABLE

@@ -97,6 +97,7 @@ if(BUILD_OCC)
          -DCMAKE_INSTALL_PREFIX=${OCC_DIR}
          -DCMAKE_PREFIX_PATH=${OCC_DIR}
          -DBUILD_LIBRARY_TYPE:STRING=Static
+         -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
          -DBUILD_MODULE_FoundationClasses:BOOL=ON
          -DBUILD_MODULE_ModelingData:BOOL=ON
          -DBUILD_MODULE_ModelingAlgorithms:BOOL=ON

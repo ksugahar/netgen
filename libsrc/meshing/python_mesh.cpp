@@ -54,6 +54,15 @@ static Transformation<3> global_trafo(Vec<3> (0,0,0));
 
 
 
+// Python overrides of the edge callbacks may take a trailing `edgenr`
+// argument (the 1-based geometry edge number); older overrides without
+// it keep working.
+static bool AcceptsEdgeNr (const py::function & f)
+{
+  auto sig = py::module_::import("inspect").attr("signature")(f);
+  return sig.attr("parameters").contains("edgenr");
+}
+
 DLL_HEADER void ExportNetgenMeshing(py::module &m) 
 {
   auto & ngexc = py::register_exception<NgException>(m, "NgException");
@@ -947,7 +956,8 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
       Vec<3> GetNormal (int surfind, const Point<3> &p, const PointGeomInfo *gi) const override {
         py::gil_scoped_acquire gil;
         if (auto overload = pybind11::get_overload(this, "GetNormal"))
-          return py::cast<Vec<3>> (overload(surfind, p, gi));
+          return py::cast<Vec<3>> (overload(surfind, p,
+              py::cast(gi, py::return_value_policy::reference)));
         else
             throw Exception ("GetNormal not implemented");
       }
@@ -963,17 +973,23 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
                                     EdgePointGeomInfo* gi = nullptr, int edgenr = -1) const override {
         py::gil_scoped_acquire gil;
         if (auto overload = pybind11::get_overload(this, "ProjectPointEdge"))
-          overload(surfind, surfind2,
-              py::cast(p, py::return_value_policy::reference),
-              py::cast(gi, py::return_value_policy::reference));
-        throw Exception ("ProjectPointEdge not implemented");
+          {
+            auto pp = py::cast(p, py::return_value_policy::reference);
+            auto pgi = py::cast(gi, py::return_value_policy::reference);
+            if (AcceptsEdgeNr(overload)) overload(surfind, surfind2, pp, pgi, edgenr);
+            else overload(surfind, surfind2, pp, pgi);
+          }
+        else
+          throw Exception ("ProjectPointEdge not implemented");
       }
 
       bool ProjectPointGI(int surfind, Point<3> & p,
                                   PointGeomInfo & gi) const override {
         py::gil_scoped_acquire gil;
         if (auto overload = pybind11::get_overload(this, "ProjectPointGI"))
-          return py::cast<bool> (overload(surfind, p, gi));
+          return py::cast<bool> (overload(surfind,
+              py::cast(p, py::return_value_policy::reference),
+              py::cast(gi, py::return_value_policy::reference)));
         else if (auto overload = pybind11::get_overload(this, "ProjectPoint"))
             return py::cast<bool> (overload(surfind, py::cast(p, py::return_value_policy::reference)));
         else
@@ -999,9 +1015,14 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
                                     int edgenr) const override {
         py::gil_scoped_acquire gil;
         if (auto overload = pybind11::get_overload(this, "PointBetweenEdge"))
-          overload(p1, p2, secpoint, surfi1, surfi2, ap1, ap2,
-              py::cast(newp, py::return_value_policy::reference),
-              py::cast(newgi, py::return_value_policy::reference));
+          {
+            auto pp = py::cast(newp, py::return_value_policy::reference);
+            auto pgi = py::cast(newgi, py::return_value_policy::reference);
+            if (AcceptsEdgeNr(overload))
+              overload(p1, p2, secpoint, surfi1, surfi2, ap1, ap2, pp, pgi, edgenr);
+            else
+              overload(p1, p2, secpoint, surfi1, surfi2, ap1, ap2, pp, pgi);
+          }
         else
             throw Exception ("PointBetweenEdge not implemented");
       }
@@ -1028,7 +1049,9 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
                                 int edgenr = -1) const override {
         py::gil_scoped_acquire gil;
         if (auto overload = pybind11::get_overload(this, "GetTangent"))
-          return py::cast<Vec<3>> (overload(p, surfi1, surfi2, egi));
+          return py::cast<Vec<3>> (AcceptsEdgeNr(overload)
+                                   ? overload(p, surfi1, surfi2, egi, edgenr)
+                                   : overload(p, surfi1, surfi2, egi));
         throw Exception ("GetTangent not implemented");
       }
 

@@ -60,8 +60,18 @@ static Transformation<3> global_trafo(Vec<3> (0,0,0));
 // it keep working.
 static bool AcceptsEdgeNr (const py::function & f)
 {
+  // Callers hold the GIL. The answer depends only on the underlying function,
+  // so inspect it once; the cache keeps its key alive and is never destroyed
+  // (no Python object is released after interpreter finalization).
+  static auto * cache = new std::map<PyObject*, std::pair<py::object, bool>>();
+  py::object key = py::hasattr(f, "__func__") ? py::object(f.attr("__func__")) : py::object(f);
+  auto found = cache->find(key.ptr());
+  if (found != cache->end())
+    return found->second.second;
   auto sig = py::module_::import("inspect").attr("signature")(f);
-  return sig.attr("parameters").contains("edgenr");
+  const bool accepts = sig.attr("parameters").contains("edgenr");
+  cache->emplace(key.ptr(), std::make_pair(key, accepts));
+  return accepts;
 }
 
 DLL_HEADER void ExportNetgenMeshing(py::module &m) 

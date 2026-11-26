@@ -1670,6 +1670,7 @@ inline ostream & operator<<(ostream  & s, const MiniElement2dT<TINDEX> & el)
     void SetDomainIn (int di) { domin = di; }
     void SetDomainOut (int dom) { domout = dom; }
     void SetBCProperty (int bc) { bcprop = bc; }
+    void SetTLOSurface (int tlo) { tlosurf = tlo; }
     void SetBCName (const string & bcn) { SetName(bcn); }
     // Philippose - 06/07/2009
     // Set the surface colour

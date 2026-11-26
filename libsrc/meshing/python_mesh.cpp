@@ -662,7 +662,7 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
 
   py::class_<Segment>(m, "Element1D")
     .def(py::init([](py::list vertices, py::list surfaces, int index, int edgenr,
-                     py::list trignums)
+                     py::list trignums, py::list dist)
                   {
                     Segment * newel = new Segment();
                     for (int i = 0; i < 2; i++)
@@ -670,6 +670,10 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
                     newel -> SetIndex(EdgeRegionIndex::FromNr1(index));
                     for(auto i : Range(len(trignums)))
                       newel->GeomInfo(i).trignum = py::cast<int>(trignums[i]);
+                    if (len(dist) != 0 && len(dist) != 2)
+                      throw Exception("Element1D: dist needs one value per end point");
+                    for(auto i : Range(len(dist)))
+                      newel->EPGeomInfo(i).dist = py::cast<double>(dist[i]);
                     if (len(surfaces))
                       {
                         // surfnr1/surfnr2 removed from Segment - surfaces are on EdgeRegion
@@ -681,6 +685,7 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
            py::arg("index")=0,
            py::arg("edgenr")=1,
            py::arg("trignums")=py::list(), // for stl
+           py::arg("dist")=py::list(), // curve parameter of each end point
          "create segment element"
          )
     .def("__repr__", &ToString<Segment>)
@@ -820,6 +825,7 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
     .def_property("domout_singular", &FaceRegion::DomainOutSingular, &FaceRegion::SetDomainOutSingular)
 
     .def_property("bc", &FaceRegion::BCProperty, &FaceRegion::SetBCProperty)
+    .def_property("tlosurf", &FaceRegion::TLOSurface, &FaceRegion::SetTLOSurface)
     .def_property("bcname",
                   [](FaceRegion & self) -> string { return self.GetBCName(); },
                   [](FaceRegion & self, string name) { self.SetBCName(name); }
@@ -1274,6 +1280,21 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
          py::call_guard<py::gil_scoped_release>())
     
     .def_property("dim", &Mesh::GetDimension, &Mesh::SetDimension)
+    .def_property("geomtype",
+                  [](const Mesh & self) { return int(self.geomtype); },
+                  [](Mesh & self, int type)
+                  {
+                    switch (type)
+                      {
+                      case Mesh::NO_GEOM: case Mesh::GEOM_2D: case Mesh::GEOM_CSG:
+                      case Mesh::GEOM_STL: case Mesh::GEOM_OCC: case Mesh::GEOM_ACIS:
+                        self.geomtype = Mesh::GEOM_TYPE(type);
+                        break;
+                      default:
+                        throw Exception("Unknown geometry type " + ToString(type));
+                      }
+                  },
+                  "geometry type written to .vol files (selects the surface element geometry info columns)")
 
     .def("EnablePreviewBuffer", &Mesh::EnablePreviewBuffer, py::arg("enable")=true,
          py::call_guard<py::gil_scoped_release>(),

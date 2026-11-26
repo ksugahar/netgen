@@ -9,6 +9,7 @@
 #include <mystdlib.h>
 #include "meshing.hpp"
 #include "boundarylayer.hpp"
+#include "geometric_refit.hpp"
 // #include <csg.hpp>
 // #include <geometry2d.hpp>
 #include <../interface/rw_medit.hpp>
@@ -1821,6 +1822,20 @@ py::arg("point_tolerance") = -1.)
             self.GetGeometry()->GetRefinement().MakeSecondOrder(self);
           })
     
+    .def ("GeometricRefit", [](Mesh & self)
+          {
+            auto st = GeometricRefit (self);
+            py::dict d;
+            d["edges_tried"] = st.edges_tried; d["edges_accepted"] = st.edges_accepted;
+            d["edges_failed"] = st.edges_failed; d["edges_rejected_distortion"] = st.edges_rejected_distortion;
+            d["faces_tried"] = st.faces_tried; d["faces_accepted"] = st.faces_accepted;
+            d["faces_failed"] = st.faces_failed; d["faces_rejected_distortion"] = st.faces_rejected_distortion;
+            d["edge_dist_before"] = st.edge_dist_before; d["edge_dist_after"] = st.edge_dist_after;
+            d["face_dist_before"] = st.face_dist_before; d["face_dist_after"] = st.face_dist_after;
+            return d;
+          },
+          "Refit curved-element coefficients of order >= 3 to minimise the distance "
+          "to the mesh geometry; call after Curve(order). Returns statistics.")
     .def ("Curve", [](Mesh & self, int order)
           {
             self.BuildCurvedElements(order);

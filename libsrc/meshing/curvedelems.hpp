@@ -53,6 +53,18 @@ public:
 
   int GetOrder () { return order; }
 
+  // Coefficient access for GeometricRefit (geometric_refit.hpp).  Indices are
+  // 0-based topology edge/face numbers; use the pointer accessors only when
+  // the matching count is positive.
+  int NumEdgeCoefficients (int edgenr) const
+  { auto e = IndexBASE<EdgeIndex>()+edgenr; return edgecoeffsindex[e+1] - edgecoeffsindex[e]; }
+  Vec<3> * EdgeCoefficients (int edgenr)
+  { return &edgecoeffs[edgecoeffsindex[IndexBASE<EdgeIndex>()+edgenr]]; }
+  int NumFaceCoefficients (int facenr) const
+  { auto f = IndexBASE<FaceIndex>()+facenr; return facecoeffsindex[f+1] - facecoeffsindex[f]; }
+  Vec<3> * FaceCoefficients (int facenr)
+  { return &facecoeffs[facecoeffsindex[IndexBASE<FaceIndex>()+facenr]]; }
+
   void DoArchive(Archive& ar);
 
   DLL_HEADER bool IsSegmentCurved (SegmentIndex segnr) const;

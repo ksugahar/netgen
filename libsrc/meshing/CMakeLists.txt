@@ -9,7 +9,7 @@ target_sources(nglib PRIVATE
         ruler2.cpp ruler3.cpp secondorder.cpp smoothing2.5.cpp		    
         smoothing2.cpp smoothing3.cpp specials.cpp
         topology.cpp validate.cpp bcfunctions.cpp   
-        parallelmesh.cpp  paralleltop.cpp  basegeom.cpp
+        parallelmesh.cpp  paralleltop.cpp  basegeom.cpp geometric_refit.cpp
         python_mesh.cpp surfacegeom.cpp
         debugging.cpp fieldlines.cpp visual_interface.cpp
         boundarylayer2d.cpp boundarylayer_interpolate.cpp
@@ -18,7 +18,7 @@ target_sources(nglib PRIVATE
 target_link_libraries( nglib PRIVATE $<BUILD_INTERFACE:netgen_metis> $<BUILD_INTERFACE:netgen_python> )
 
 install(FILES
-  adfront2.hpp adfront3.hpp basegeom.hpp bcfunctions.hpp bisect.hpp
+  adfront2.hpp adfront3.hpp basegeom.hpp geometric_refit.hpp bcfunctions.hpp bisect.hpp
   boundarylayer.hpp classifyhpel.hpp clusters.hpp curvedelems.hpp
   findip2.hpp findip.hpp geomsearch.hpp global.hpp hpref_hex.hpp
   hprefinement.hpp hpref_prism.hpp hpref_pyramid.hpp hpref_quad.hpp

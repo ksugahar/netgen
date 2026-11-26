@@ -389,6 +389,15 @@ namespace netgen
                               const EdgePointGeomInfo & egi,
                               int edgenr = -1) const
     {
+      // Tangent of a geometry edge at the projection of p (its normalized
+      // parameter, as GeometryEdge::ProjectPoint stores it in dist).
+      if(edgenr > 0 && edgenr-1 < edges.Size())
+        {
+          Point<3> q = p;
+          EdgePointGeomInfo gi = egi;
+          edges[edgenr-1]->ProjectPoint(q, &gi);
+          return edges[edgenr-1]->GetTangent(gi.dist);
+        }
       throw Exception("Base geometry get tangent called");
     }
 

@@ -5794,7 +5794,7 @@ namespace netgen
   }
 
 
-  template
+  template DLL_HEADER
   void  CurvedElements :: 
   CalcMultiPointElementTransformation
   (ElementIndex elnr, int n,

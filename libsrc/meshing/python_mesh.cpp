@@ -663,7 +663,7 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
 
   py::class_<Segment>(m, "Element1D")
     .def(py::init([](py::list vertices, py::list surfaces, int index, int edgenr,
-                     py::list trignums)
+                     py::list trignums, py::list dist)
                   {
                     Segment * newel = new Segment();
                     for (int i = 0; i < 2; i++)
@@ -671,6 +671,10 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
                     newel -> SetIndex(EdgeRegionIndex::FromNr1(index));
                     for(auto i : Range(len(trignums)))
                       newel->GeomInfo(i).trignum = py::cast<int>(trignums[i]);
+                    if (len(dist) != 0 && len(dist) != 2)
+                      throw Exception("Element1D: dist needs one value per end point");
+                    for(auto i : Range(len(dist)))
+                      newel->EPGeomInfo(i).dist = py::cast<double>(dist[i]);
                     if (len(surfaces))
                       {
                         // surfnr1/surfnr2 removed from Segment - surfaces are on EdgeRegion
@@ -682,6 +686,7 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
            py::arg("index")=0,
            py::arg("edgenr")=1,
            py::arg("trignums")=py::list(), // for stl
+           py::arg("dist")=py::list(), // curve parameter of each end point
          "create segment element"
          )
     .def("__repr__", &ToString<Segment>)
@@ -821,6 +826,7 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
     .def_property("domout_singular", &FaceRegion::DomainOutSingular, &FaceRegion::SetDomainOutSingular)
 
     .def_property("bc", &FaceRegion::BCProperty, &FaceRegion::SetBCProperty)
+    .def_property("tlosurf", &FaceRegion::TLOSurface, &FaceRegion::SetTLOSurface)
     .def_property("bcname",
                   [](FaceRegion & self) -> string { return self.GetBCName(); },
                   [](FaceRegion & self, string name) { self.SetBCName(name); }
@@ -1275,6 +1281,69 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
          py::call_guard<py::gil_scoped_release>())
     
     .def_property("dim", &Mesh::GetDimension, &Mesh::SetDimension)
+    .def_property("geomtype",
+                  [](const Mesh & self) { return int(self.geomtype); },
+                  [](Mesh & self, int type)
+                  {
+                    switch (type)
+                      {
+                      case Mesh::NO_GEOM: case Mesh::GEOM_2D: case Mesh::GEOM_CSG:
+                      case Mesh::GEOM_STL: case Mesh::GEOM_OCC: case Mesh::GEOM_ACIS:
+                        self.geomtype = Mesh::GEOM_TYPE(type);
+                        break;
+                      default:
+                        throw Exception("Unknown geometry type " + ToString(type));
+                      }
+                  },
+                  "geometry type written to .vol files (selects the surface element geometry info columns)")
+    .def("DeleteFaceDescriptors", [](Mesh & self, std::vector<int> descriptors)
+          {
+            // Remove the surface elements of the given 1-based descriptors and
+            // the descriptors themselves. The remaining descriptors keep their
+            // order and are renumbered contiguously; curved-element data and
+            // topology are left untouched.
+            const int nfd = self.GetNFD();
+            std::vector<bool> drop(nfd + 1, false);
+            for (int fd : descriptors)
+              {
+                if (fd < 1 || fd > nfd)
+                  throw Exception("DeleteFaceDescriptors: invalid descriptor " + ToString(fd));
+                drop[fd] = true;
+              }
+            int removed = 0;
+            for (int sei = self.GetNSE() - 1; sei >= 0; --sei)
+              {
+                const auto index = SurfaceElementIndex::FromNr0(sei);
+                if (drop[self.SurfaceElements()[index].GetIndex().Nr1()])
+                  {
+                    self.SurfaceElements().DeleteElement(index);
+                    removed++;
+                  }
+              }
+            std::vector<int> old_to_new(nfd + 1, 0);
+            Array<FaceRegion> kept;
+            for (int fd = 1; fd <= nfd; ++fd)
+              {
+                if (drop[fd]) continue;
+                const auto & old_fd = self.GetFaceDescriptor(FaceRegionIndex::FromNr1(fd));
+                FaceRegion new_fd(old_fd.SurfNr(), old_fd.DomainIn(), old_fd.DomainOut(),
+                                  old_fd.TLOSurface());
+                new_fd.SetBCProperty(old_fd.BCProperty());
+                new_fd.SetBCName(old_fd.GetBCName());
+                new_fd.SetSurfColour(old_fd.SurfColour());
+                new_fd.SetDomainInSingular(old_fd.DomainInSingular());
+                new_fd.SetDomainOutSingular(old_fd.DomainOutSingular());
+                kept.Append(new_fd);
+                old_to_new[fd] = kept.Size();
+              }
+            for (auto && el : self.SurfaceElements())
+              el.SetIndex(FaceRegionIndex::FromNr1(old_to_new[el.GetIndex().Nr1()]));
+            self.ClearFaceDescriptors();
+            for (const auto & fd : kept)
+              self.AddFaceDescriptor(fd);
+            return removed;
+          }, py::arg("descriptors"),
+         "delete the given 1-based face descriptors and their surface elements, renumbering the rest")
 
     .def("EnablePreviewBuffer", &Mesh::EnablePreviewBuffer, py::arg("enable")=true,
          py::call_guard<py::gil_scoped_release>(),

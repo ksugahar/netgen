@@ -1,4 +1,6 @@
 #include <mystdlib.h>
+#include <map>
+#include <set>
 
 
 #include "curvedelems.hpp"
@@ -11,6 +13,144 @@
 
 namespace netgen
 {
+
+  Array<CurvedElements::PeriodicTransfer> CurvedElements ::
+  CopyPeriodicCoefficients (FlatArray<std::array<int,3>> master_tris,
+                            FlatArray<std::array<int,3>> slave_tris)
+  {
+    if (master_tris.Size() != slave_tris.Size())
+      throw Exception("CopyPeriodicCoefficients: master/slave triangle count mismatch");
+    if (order < 1 || order > 3)
+      throw Exception("CopyPeriodicCoefficients: supports polynomial orders 1 through 3 only");
+    if (rational)
+      throw Exception("CopyPeriodicCoefficients: rational geometry is unsupported");
+    Array<PeriodicTransfer> plan;
+    if (!ishighorder) return plan;
+
+    const auto & top = mesh.GetTopology();
+    const size_t nedges = top.GetNEdges(), nfaces = top.GetNFaces();
+    if (edgeorder.Size() != nedges || faceorder.Size() != nfaces ||
+        edgecoeffsindex.Size() != nedges+1 || facecoeffsindex.Size() != nfaces+1)
+      throw Exception("CopyPeriodicCoefficients: curved storage does not match the topology");
+    auto check_layout = [this] (auto & orders, auto & index, auto & coeffs, bool faces)
+    {
+      for (size_t i = 0; i < orders.Size(); i++)
+        {
+          const int degree = orders.Data()[i];
+          const int begin = index.Data()[i], end = index.Data()[i+1];
+          const int expected = faces ? (degree-1)*(degree-2)/2 : degree-1;
+          if (degree < 1 || degree > order || begin < 0 || end < begin ||
+              size_t(end) > coeffs.Size() || end-begin != expected)
+            throw Exception("CopyPeriodicCoefficients: entity coefficient span/order mismatch");
+        }
+      for (auto & c : coeffs)
+        for (int k = 0; k < 3; k++)
+          if (!std::isfinite(c(k)))
+            throw Exception("CopyPeriodicCoefficients: nonfinite coefficient storage");
+    };
+    check_layout(edgeorder, edgecoeffsindex, edgecoeffs, false);
+    check_layout(faceorder, facecoeffsindex, facecoeffs, true);
+
+    std::map<std::array<int,2>, int> edges;
+    std::map<std::array<int,3>, int> faces;
+    for (size_t e = 0; e < nedges; e++)
+      {
+        auto v = top.GetEdgeVertices(IndexBASE<EdgeIndex>() + e);
+        std::array<int,2> key{v[0].Nr1(), v[1].Nr1()};
+        if (key[0] >= key[1] || !edges.emplace(key, int(e)).second)
+          throw Exception("CopyPeriodicCoefficients: noncanonical or duplicate topology edge");
+      }
+    for (size_t f = 0; f < nfaces; f++)
+      {
+        auto v = top.GetFaceVertices(IndexBASE<FaceIndex>() + f);
+        if (v.Size() != 3) continue;
+        std::array<int,3> key{v[0].Nr1(), v[1].Nr1(), v[2].Nr1()};
+        std::sort(key.begin(), key.end());
+        if (!faces.emplace(key, int(f)).second)
+          throw Exception("CopyPeriodicCoefficients: duplicate topology face");
+      }
+    auto lookup = [] (auto & table, auto key, const char * kind)
+    {
+      auto found = table.find(key);
+      if (found == table.end())
+        throw Exception(std::string("CopyPeriodicCoefficients: missing ") + kind);
+      return found->second;
+    };
+
+    struct Owner { int master, sign; };
+    std::map<int, Owner> edge_owners, face_owners;
+    auto own = [] (auto & owners, int slave, int master, int sign)
+    {
+      auto ins = owners.emplace(slave, Owner{master, sign});
+      if (!ins.second && (ins.first->second.master != master || ins.first->second.sign != sign))
+        throw Exception("CopyPeriodicCoefficients: conflicting seam coefficient ownership");
+    };
+    for (size_t t = 0; t < master_tris.Size(); t++)
+      {
+        auto m = master_tris[t], sl = slave_tris[t];
+        auto ms = m, ss = sl;
+        std::sort(ms.begin(), ms.end()); std::sort(ss.begin(), ss.end());
+        own(face_owners, lookup(faces, ss, "face"), lookup(faces, ms, "face"), 1);
+        for (int a = 0; a < 3; a++)
+          for (int b = a+1; b < 3; b++)
+            {
+              std::array<int,2> me{m[a], m[b]}, te{sl[a], sl[b]};
+              const int sign = te[0] < te[1] ? 1 : -1;
+              std::sort(me.begin(), me.end()); std::sort(te.begin(), te.end());
+              // the master edge keeps its own canonical direction; the image
+              // direction is compared against the master's increasing order
+              const int msign = m[a] < m[b] ? 1 : -1;
+              own(edge_owners, lookup(edges, te, "edge"), lookup(edges, me, "edge"), sign * msign);
+            }
+      }
+
+    auto stage = [&] (bool face, auto & owners)
+    {
+      std::set<int> sources;
+      for (auto & row : owners) sources.insert(row.second.master);
+      for (auto & row : owners)
+        {
+          const int slave = row.first, master = row.second.master;
+          if (sources.count(slave))
+            throw Exception("CopyPeriodicCoefficients: coefficient source and destination overlap");
+          const int count = face ? NumFaceCoefficients(master) : NumEdgeCoefficients(master);
+          const int target_count = face ? NumFaceCoefficients(slave) : NumEdgeCoefficients(slave);
+          const int sorder = face ? faceorder[IndexBASE<FaceIndex>()+master] : edgeorder[IndexBASE<EdgeIndex>()+master];
+          const int torder = face ? faceorder[IndexBASE<FaceIndex>()+slave] : edgeorder[IndexBASE<EdgeIndex>()+slave];
+          if (count != target_count || sorder != torder)
+            throw Exception("CopyPeriodicCoefficients: coefficient order or layout mismatch");
+          if (!count) continue;
+          Vec<3> * src = face ? FaceCoefficients(master) : EdgeCoefficients(master);
+          Vec<3> * dst = face ? FaceCoefficients(slave) : EdgeCoefficients(slave);
+          for (int mode = 0; mode < count; mode++)
+            {
+              const int sign = (!face && mode % 2 == 1) ? row.second.sign : 1;
+              PeriodicTransfer tr{face, master, slave, mode, sign, dst[mode], double(sign) * src[mode]};
+              plan.Append(tr);
+            }
+        }
+    };
+    stage(false, edge_owners);
+    stage(true, face_owners);
+
+    auto target = [this] (const PeriodicTransfer & tr) -> Vec<3> &
+    { return (tr.face ? FaceCoefficients(tr.slave) : EdgeCoefficients(tr.slave))[tr.mode]; };
+    try
+      {
+        for (auto & tr : plan) target(tr) = tr.expected;
+        for (auto & tr : plan)
+          for (int k = 0; k < 3; k++)
+            if (target(tr)(k) != tr.expected(k))
+              throw Exception("CopyPeriodicCoefficients: paired coefficient equality failed");
+      }
+    catch (...)
+      {
+        for (auto & tr : plan) target(tr) = tr.original;
+        throw;
+      }
+    return plan;
+  }
+
   using namespace std;
   
   //   bool rational = true;

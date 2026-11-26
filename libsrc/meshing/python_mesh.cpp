@@ -1789,6 +1789,14 @@ py::arg("point_tolerance") = -1.)
           {
             return self.GetCurvedElements().GetOrder();
           })
+    .def ("AddNamedPointIdentification", [](Mesh & self, PointIndex pid1, PointIndex pid2,
+                                             string name, Identifications::ID_TYPE type)
+          {
+            self.GetIdentifications().Add(pid1, pid2, name, type);
+            return self.GetIdentifications().GetNr(name);
+          }, py::arg("pid1"), py::arg("pid2"), py::arg("name"),
+          py::arg("type")=Identifications::PERIODIC,
+          "identify two points in the identification group called name; returns its number")
     .def("GetNrIdentifications", [](Mesh& self)
                                  {
                                    return self.GetIdentifications().GetMaxNr();
@@ -1905,6 +1913,28 @@ py::arg("point_tolerance") = -1.)
           },
           "Refit curved-element coefficients of order >= 3 to minimise the distance "
           "to the mesh geometry; call after Curve(order). Returns statistics.")
+    .def ("CopyPeriodicCurvedCoefficients",
+          [](Mesh & self, std::vector<std::array<int,3>> master, std::vector<std::array<int,3>> slave)
+          {
+            Array<std::array<int,3>> m(master.size()), sl(slave.size());
+            for (size_t i = 0; i < master.size(); i++) m[i] = master[i];
+            for (size_t i = 0; i < slave.size(); i++) sl[i] = slave[i];
+            auto plan = self.GetCurvedElements().CopyPeriodicCoefficients(m, sl);
+            py::list rows;
+            for (auto & tr : plan)
+              {
+                py::dict d;
+                d["entity"] = tr.face ? "face" : "edge";
+                d["master"] = tr.master; d["slave"] = tr.slave;
+                d["mode"] = tr.mode; d["sign"] = tr.sign;
+                d["original"] = py::make_tuple(tr.original(0), tr.original(1), tr.original(2));
+                d["expected"] = py::make_tuple(tr.expected(0), tr.expected(1), tr.expected(2));
+                rows.append(d);
+              }
+            return rows;
+          }, py::arg("master"), py::arg("slave"),
+          "Copy curved edge/face coefficients from master triangles (1-based point numbers) "
+          "to their periodic images slave[i]; returns the applied transfers.")
     .def ("Curve", [](Mesh & self, int order)
           {
             self.BuildCurvedElements(order);

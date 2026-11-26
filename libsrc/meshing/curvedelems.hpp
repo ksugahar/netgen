@@ -67,6 +67,21 @@ public:
 
   void DoArchive(Archive& ar);
 
+  // Periodic seams: copy the edge and face coefficients of master entities
+  // to the image entities, so that both sides of a periodic pair carry the
+  // same curved geometry (translation lives in the vertices). Triangles are
+  // given as 1-based point numbers; slave[i] is the image of master[i].
+  // Odd edge modes change sign when the image edge runs the other way.
+  // Every check precedes the first write; a failed write is rolled back.
+  struct PeriodicTransfer
+  {
+    bool face;
+    int master, slave, mode, sign;   // 0-based topology edge/face numbers
+    Vec<3> original, expected;
+  };
+  DLL_HEADER Array<PeriodicTransfer> CopyPeriodicCoefficients
+    (FlatArray<std::array<int,3>> master, FlatArray<std::array<int,3>> slave);
+
   DLL_HEADER bool IsSegmentCurved (SegmentIndex segnr) const;
   DLL_HEADER bool IsSurfaceElementCurved (SurfaceElementIndex sei) const;
   DLL_HEADER bool IsElementCurved (ElementIndex ei) const;

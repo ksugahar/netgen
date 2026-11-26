@@ -1286,6 +1286,10 @@ namespace netgen
     if (curvedelems && curvedelems->IsHighOrder())
       {
         outfile << "curvedelements" << endl;
+        // The face colours above leave the stream at precision(8), which
+        // rounds the curving coefficients to about 1e-8; 17 significant
+        // digits round-trip a double exactly.
+        outfile.precision(17);
         shared_ptr<std::ostream> spoutfile(&outfile,  [](void*) noexcept {});
         TextOutArchive out(std::move(spoutfile));
         out & (*curvedelems);

@@ -177,6 +177,24 @@ std::vector<ng::ElementIndex> shared_volumes(const ng::MeshTopology & top,
   return out;
 }
 
+// Restores `n` coefficient vectors on scope exit unless released, so an
+// exception from a projection callback never leaves an unvalidated trial in
+// the mesh.  Entities accepted before the exception stay committed: each one
+// was validated on its own.
+struct CoefGuard
+{
+  ng::Vec<3> * coef;
+  std::vector<ng::Vec<3>> saved;
+  bool active = true;
+  CoefGuard(ng::Vec<3> * c, int n) : coef(c), saved(c, c + n) {}
+  ~CoefGuard()
+  {
+    if (active)
+      for (size_t k = 0; k < saved.size(); k++) coef[k] = saved[k];
+  }
+  void release() { active = false; }
+};
+
 struct Refitter
 {
   ng::Mesh & mesh;
@@ -308,6 +326,7 @@ struct Refitter
     const int np = (int)e.fit_ref.size();
     const int nu = 3 * n;
     std::vector<ng::Vec<3>> saved(coef, coef + n);
+    CoefGuard guard(coef, n);
 
     before = max_distance(e);
     if (before < 0) return -1;
@@ -539,6 +558,7 @@ struct Refitter
       if (failed) return -1;
       return closer ? -2 : 0;   // -2: closer, but it would distort elements
     }
+    guard.release();
     return 1;
   }
 };
@@ -553,9 +573,10 @@ int refit_edge_two_starts(Refitter & R, const Entity & E, ng::Vec<3> * coef, int
                           double & before, double & after)
 {
   std::vector<ng::Vec<3>> orig(coef, coef + n);
+  CoefGuard guard(coef, n);   // an exception in either start restores Netgen's
   const std::vector<double> area0 = R.area_samples(E), det0 = R.volume_det_samples(E);
   int r1 = R.refit(E, coef, n, before, after);
-  if (n < 2 || before < 0) return r1;
+  if (n < 2 || before < 0) { guard.release(); return r1; }
   std::vector<ng::Vec<3>> c1(coef, coef + n);
   for (int k = 0; k < n; k++) coef[k] = orig[k];
   coef[n - 1] = ng::Vec<3>(0, 0, 0);
@@ -565,9 +586,11 @@ int refit_edge_two_starts(Refitter & R, const Entity & E, ng::Vec<3> * coef, int
       Refitter::within_factor_two(area0, R.area_samples(E)) &&
       Refitter::within_factor_two(det0, R.volume_det_samples(E))) {
     after = a2;
+    guard.release();
     return 1;
   }
   for (int k = 0; k < n; k++) coef[k] = c1[k];
+  guard.release();
   return r1;
 }
 
@@ -587,6 +610,22 @@ GeometricRefitStats GeometricRefit (ng::Mesh & mesh)
   // up to 9x worse than Netgen), and keeping every triangle within Netgen's
   // distance made the export about 35x slower than Netgen.
   if (order <= 2) return st;
+
+  // The reference tables above cover linear elements only.  Reject any other
+  // type before the first coefficient changes, instead of reading past the
+  // vertex weights or sampling the wrong reference domain.
+  for (const auto & el : mesh.SurfaceElements())
+    if (el.GetType() != ng::TRIG && el.GetType() != ng::QUAD)
+      throw ng::Exception("GeometricRefit: unsupported surface element type " +
+                          ng::ToString(int(el.GetType())) + " (linear TRIG and QUAD only)");
+  for (const auto & el : mesh.VolumeElements())
+    switch (el.GetType()) {
+      case ng::TET: case ng::PRISM: case ng::PYRAMID: case ng::HEX: break;
+      default:
+        throw ng::Exception("GeometricRefit: unsupported volume element type " +
+                            ng::ToString(int(el.GetType())) +
+                            " (linear TET, PRISM, PYRAMID and HEX only)");
+    }
 
   // Edges that lie on a geometric curve (mesh segments).
   std::unordered_map<int, int> curve_edge;   // edge -> segment

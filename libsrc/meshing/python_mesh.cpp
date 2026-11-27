@@ -1306,54 +1306,6 @@ DLL_HEADER void ExportNetgenMeshing(py::module &m)
                       }
                   },
                   "geometry type written to .vol files (selects the surface element geometry info columns)")
-    .def("DeleteFaceDescriptors", [](Mesh & self, std::vector<int> descriptors)
-          {
-            // Remove the surface elements of the given 1-based descriptors and
-            // the descriptors themselves. The remaining descriptors keep their
-            // order and are renumbered contiguously; curved-element data and
-            // topology are left untouched.
-            const int nfd = self.GetNFD();
-            std::vector<bool> drop(nfd + 1, false);
-            for (int fd : descriptors)
-              {
-                if (fd < 1 || fd > nfd)
-                  throw Exception("DeleteFaceDescriptors: invalid descriptor " + ToString(fd));
-                drop[fd] = true;
-              }
-            int removed = 0;
-            for (int sei = self.GetNSE() - 1; sei >= 0; --sei)
-              {
-                const auto index = SurfaceElementIndex::FromNr0(sei);
-                if (drop[self.SurfaceElements()[index].GetIndex().Nr1()])
-                  {
-                    self.SurfaceElements().DeleteElement(index);
-                    removed++;
-                  }
-              }
-            std::vector<int> old_to_new(nfd + 1, 0);
-            Array<FaceRegion> kept;
-            for (int fd = 1; fd <= nfd; ++fd)
-              {
-                if (drop[fd]) continue;
-                const auto & old_fd = self.GetFaceDescriptor(FaceRegionIndex::FromNr1(fd));
-                FaceRegion new_fd(old_fd.SurfNr(), old_fd.DomainIn(), old_fd.DomainOut(),
-                                  old_fd.TLOSurface());
-                new_fd.SetBCProperty(old_fd.BCProperty());
-                new_fd.SetBCName(old_fd.GetBCName());
-                new_fd.SetSurfColour(old_fd.SurfColour());
-                new_fd.SetDomainInSingular(old_fd.DomainInSingular());
-                new_fd.SetDomainOutSingular(old_fd.DomainOutSingular());
-                kept.Append(new_fd);
-                old_to_new[fd] = kept.Size();
-              }
-            for (auto && el : self.SurfaceElements())
-              el.SetIndex(FaceRegionIndex::FromNr1(old_to_new[el.GetIndex().Nr1()]));
-            self.ClearFaceDescriptors();
-            for (const auto & fd : kept)
-              self.AddFaceDescriptor(fd);
-            return removed;
-          }, py::arg("descriptors"),
-         "delete the given 1-based face descriptors and their surface elements, renumbering the rest")
 
     .def("EnablePreviewBuffer", &Mesh::EnablePreviewBuffer, py::arg("enable")=true,
          py::call_guard<py::gil_scoped_release>(),

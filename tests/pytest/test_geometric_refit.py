@@ -90,5 +90,6 @@ def test_refit_exception_leaves_only_original_or_accepted_coefficients(tmp_path)
         with pytest.raises(Exception, match="injected"):
             m.GeometricRefit()
         got = _lines(m, tmp_path, "k%d.vol" % k)
+        assert len(got) == len(original) == len(accepted), (len(got), len(original), len(accepted))
         foreign = [i for i, (a, b, c) in enumerate(zip(got, original, accepted)) if a != b and a != c]
         assert not foreign, "k=%d: %d lines match neither the original nor the accepted value" % (k, len(foreign))

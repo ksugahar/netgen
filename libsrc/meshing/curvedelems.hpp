@@ -57,6 +57,57 @@ public:
   int GetOrder () const { return order; }
   bool IsRational () const { return rational; }
 
+  // Coefficient access for external curving tools (geometric refit, periodic
+  // seam copies).  Indices are 0-based topology edge/face numbers; use the
+  // pointer accessors only when the matching count is positive.
+  int NumEdgeCoefficients (int edgenr) const
+  { auto e = IndexBASE<EdgeIndex>()+edgenr; return edgecoeffsindex[e+1] - edgecoeffsindex[e]; }
+  Vec<3> * EdgeCoefficients (int edgenr)
+  { return &edgecoeffs[edgecoeffsindex[IndexBASE<EdgeIndex>()+edgenr]]; }
+  int NumFaceCoefficients (int facenr) const
+  { auto f = IndexBASE<FaceIndex>()+facenr; return facecoeffsindex[f+1] - facecoeffsindex[f]; }
+  Vec<3> * FaceCoefficients (int facenr)
+  { return &facecoeffs[facecoeffsindex[IndexBASE<FaceIndex>()+facenr]]; }
+
+  // Coefficient layout queries for copying curved geometry across periodic
+  // seams (orders 1..3, polynomial storage only).
+  int PeriodicEdgeOrder (int edge) const { return edgeorder[IndexBASE<EdgeIndex>()+edge]; }
+  int PeriodicFaceOrder (int face) const { return faceorder[IndexBASE<FaceIndex>()+face]; }
+  bool PeriodicRational () const { return rational; }
+  static void ValidatePeriodicLayout (const int * orders, size_t norders,
+      const int * indices, size_t nindices, const Vec<3> * coefficients, size_t ncoefficients,
+      int maximum_order, bool triangular_faces)
+  {
+    if (maximum_order < 1 || maximum_order > 3 ||
+        nindices != norders+1 || indices[0] != 0)
+      throw std::runtime_error("Invalid periodic coefficient layout dimensions");
+    for (size_t i = 0; i < norders; ++i) {
+      const int degree = orders[i];
+      if (degree < 1 || degree > maximum_order)
+        throw std::runtime_error("Unsupported periodic entity coefficient order");
+      const int expected = triangular_faces ? (degree-1)*(degree-2)/2 : degree-1;
+      if (indices[i] < 0 || indices[i+1] < indices[i] ||
+          size_t(indices[i+1]) > ncoefficients || indices[i+1]-indices[i] != expected)
+        throw std::runtime_error("Periodic entity coefficient span/order mismatch");
+    }
+    // Compression can retain a finite unused tail. Do not require its removal.
+    for (size_t i = 0; i < ncoefficients; ++i)
+      for (int axis = 0; axis < 3; ++axis)
+        if (!std::isfinite(coefficients[i](axis)))
+          throw std::runtime_error("Nonfinite periodic coefficient storage");
+  }
+  void ValidatePeriodicStorage (size_t edges, size_t faces) const
+  {
+    if (rational || order < 1 || order > 3 ||
+        edgeorder.Size() != edges || faceorder.Size() != faces ||
+        edgecoeffsindex.Size() != edges+1 || facecoeffsindex.Size() != faces+1)
+      throw std::runtime_error("Unsupported periodic curved coefficient storage");
+    ValidatePeriodicLayout(edgeorder.Data(), edgeorder.Size(), edgecoeffsindex.Data(), edgecoeffsindex.Size(),
+                           edgecoeffs.Data(), edgecoeffs.Size(), order, false);
+    ValidatePeriodicLayout(faceorder.Data(), faceorder.Size(), facecoeffsindex.Data(), facecoeffsindex.Size(),
+                           facecoeffs.Data(), facecoeffs.Size(), order, true);
+  }
+
   void DoArchive(Archive& ar);
 
   DLL_HEADER bool IsSegmentCurved (SegmentIndex segnr) const;

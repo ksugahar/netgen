@@ -609,12 +609,14 @@ namespace netgen
   }
 
   
+  // scaled: x in (-sx,sx), y in (-sy,sy); the bubble vanishes where the
+  // scaling does (on a prism quad face: on the opposite vertical edge)
   template <class Tx, class Ty, class Tsx, class Tsy, typename FUNC>
   static void CalcScaledQuadShapeLambda (int n, Tx x, Ty y, Tsx sx, Tsy sy, FUNC func)
   {
     if (n < 2) return;
     int ii = 0;
-    Tx bub = (1-x*x)*(1-y*y);
+    Tx bub = (sx*sx-x*x)*(sy*sy-y*y);
     jacpol22.EvaluateScaledLambda
       (n-2, x, sx, [&](int ix, Tx valx) {
         jacpol22.EvaluateScaledLambda (n-2, y, sy, [&](int iy, Ty valy) {

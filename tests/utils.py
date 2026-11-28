@@ -141,7 +141,7 @@ def main():
     parser.add_argument(
         "--package",
         type=str,
-        default="netgen-mesher",
+        default="netgen-mesher-radia",
         help="Package name to check on pypi",
     )
 

@@ -681,12 +681,12 @@ endif(UNIX)
 
 if(USE_PYTHON AND NOT SKBUILD)
   # install egg file to let python/pip know that Netgen ist installed
-  file( WRITE "netgen_mesher-py3.egg-info"
+  file( WRITE "netgen_mesher_radia-py3.egg-info"
 "Metadata-Version: 2.1
-Name: netgen-mesher
+Name: netgen-mesher-radia
 Version: ${NETGEN_VERSION_PYTHON}
 ")
-  install(FILES netgen_mesher-py3.egg-info DESTINATION ${NG_INSTALL_DIR_PYTHON} COMPONENT netgen)
+  install(FILES netgen_mesher_radia-py3.egg-info DESTINATION ${NG_INSTALL_DIR_PYTHON} COMPONENT netgen)
 endif()
 
 if(APPLE AND NOT SKBUILD)

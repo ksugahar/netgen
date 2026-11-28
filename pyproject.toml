@@ -7,7 +7,7 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "netgen-mesher"
+name = "netgen-mesher-radia"
 dynamic = ["version", "dependencies"]
 description = "Netgen mesh generator"
 authors = [{ name = "The Netgen team" }]
@@ -45,7 +45,7 @@ BUILD_OCC = "OFF"
 USE_OCC = "ON"
 BUILD_FOR_CONDA = "ON"
 BUILD_STUB_FILES = "ON"
-NETGEN_PYTHON_PACKAGE_NAME = "netgen-mesher"
+NETGEN_PYTHON_PACKAGE_NAME = "netgen-mesher-radia"
 
 # ---- Linux
 [[tool.scikit-build.overrides]]
